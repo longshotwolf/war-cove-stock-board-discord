@@ -71,3 +71,11 @@ the lane does not answer.
 the standing record (via the board's getproofpage actions), localizes
 the fonts, and re-injects the data layer. Publish with
 `~/workspace/day-brief-hosting/publish-stock-discord.py`.
+
+**Copy-only bell patch (assemble.py step 5):** in the board's own
+bundle the bell computer stands in the Owner's Office on the Day Board
+screen only — the Owner's Office at the head of the Company Floor
+carried just the direction window, and the Warlord found no bell in
+his floor office (Nov 17, 2026). Step 5 patches the COPIED bundle so
+the same bell computer also stands in the floor Owner's Office, fed
+by the same board data. The house board itself is never patched.
