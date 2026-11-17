@@ -25,6 +25,20 @@
 // calls when their frame rolls, exactly as the board does. Entries
 // written inside this copy live in this browser's local ledger only;
 // they do not flow back to the house board's record.
+//
+// CALLA'S ROOM rides in this copy too: her Day Brief (master copy)
+// side is answered below by a client-side port of the board's
+// buildCommentary — Sierra's 3-minute survey, Terra's bottoms and
+// Vega's tops off the coin's own Yahoo SYMBOL-USD tape (through the
+// /yho door inside Discord), the timeframe cadence, and the 6H
+// spread RELAYED OUT OF SABLE'S ROOM (Sable's figure, direction and
+// band word off her locked scale), read first. Her stock side reads
+// off getBoard, as on the board. Her VOICE is the one piece that
+// cannot ride: Aria is synthesized line by line through the house
+// TTS lane on the board's server, and a static page has no door to
+// that lane — so here her lines stand as text only and no other
+// voice is substituted, exactly as the board itself behaves when
+// the lane does not answer.
 // ════════════════════════════════════════════════════════════════════
 (function () {
   "use strict";
@@ -1043,6 +1057,339 @@
     });
   }
 
+  // ── Calla's commentary — the Day Brief (master copy) rundown ────
+  // A client-side port of the board's buildCommentary. For ONE coin
+  // at a time (Litecoin · Bitcoin · Ethereum, Litecoin first) she
+  // reads Sierra's 3-minute survey (her gate and all), Terra's temp
+  // bottoms and Vega's temp tops, and the timeframe cadence — 1H ·
+  // 4H · 6H · DAY · WEEK · MONTH — off the coin's own candles, the
+  // same candle setup and reading as the Day Brief. Her 6H spread
+  // line is composed out of SABLE'S ROOM: Sable's exact figure (live
+  // price vs her forming 6H candle's Heikin-Ashi close), Sable's
+  // direction, and Sable's band word off her room's locked scale,
+  // in Sable's words — read FIRST in every rundown. A temp hit —
+  // price standing on a MONTH · WEEK · DAY level within the standing
+  // 0.3% tolerance — carries the whole spoken line, both halves
+  // every time, with the level price.
+  var COMMENTARY_COINS = {
+    LTC: { name: "Litecoin", pair: "LTC-USD" },
+    BTC: { name: "Bitcoin", pair: "BTC-USD" },
+    ETH: { name: "Ethereum", pair: "ETH-USD" },
+  };
+  // SABLE'S ROOM SCALE — the band words are SABLE'S, off her room's
+  // locked scale on the Day Brief (the spread_band_word_check law:
+  // a correct number with the wrong word still fails). Calla relays
+  // this scale — she never bands a spread in words of her own. The
+  // under-rung word is "a weak move" on the Warlord's word, and the
+  // cycle starts AT the rung, never below it.
+  var SPREAD_SCALES = {
+    LTC: {
+      note: "Sable's room scale for Litecoin — under 30¢ a weak move · 30¢ and beyond a cycle · $1.00+ a big move",
+      bands: [
+        { min: 1, word: "a big move" },
+        { min: 0.3, word: "a cycle" },
+        { min: 0, word: "a weak move" },
+      ],
+    },
+    BTC: {
+      note: "Sable's room scale for Bitcoin — under $300 a weak move · $300+ a cycle · $500+ a move · $800+ a better move · $1,000+ big big move",
+      bands: [
+        { min: 1000, word: "big big move" },
+        { min: 800, word: "a better move" },
+        { min: 500, word: "a move" },
+        { min: 300, word: "a cycle" },
+        { min: 0, word: "a weak move" },
+      ],
+    },
+    ETH: {
+      note: "Sable's room scale for Ethereum — under $9 a weak move · $9+ a cycle · $15+ a move · $30+ a big move",
+      bands: [
+        { min: 30, word: "a big move" },
+        { min: 15, word: "a move" },
+        { min: 9, word: "a cycle" },
+        { min: 0, word: "a weak move" },
+      ],
+    },
+  };
+  function spreadBandWord(coin, spread) {
+    var a = Math.abs(spread);
+    var bands = SPREAD_SCALES[coin].bands;
+    for (var i = 0; i < bands.length; i++) if (a >= bands[i].min) return bands[i].word;
+    return "a weak move";
+  }
+  // Number words for the spoken relay — Sable's figure said the way
+  // Sable's room says it: "one cent", "thirty cents", "three hundred
+  // twelve dollars and forty cents".
+  var NUM_ONES = [
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+    "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+  ];
+  var NUM_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+  function numWords(n) {
+    if (n < 20) return NUM_ONES[n] != null ? NUM_ONES[n] : String(n);
+    if (n < 100) {
+      var t = Math.floor(n / 10);
+      var r = n % 10;
+      return (NUM_TENS[t] || "") + (r ? "-" + (NUM_ONES[r] != null ? NUM_ONES[r] : String(r)) : "");
+    }
+    if (n < 1000) {
+      var h = Math.floor(n / 100);
+      var r2 = n % 100;
+      return (NUM_ONES[h] != null ? NUM_ONES[h] : String(h)) + " hundred" + (r2 ? " " + numWords(r2) : "");
+    }
+    if (n < 1000000) {
+      var th = Math.floor(n / 1000);
+      var r3 = n % 1000;
+      return numWords(th) + " thousand" + (r3 ? " " + numWords(r3) : "");
+    }
+    return String(n);
+  }
+  function spreadFigureWords(figure) {
+    var a = Math.abs(figure);
+    if (a > 0 && a < 0.005) return "under a cent";
+    var dollars = Math.floor(a);
+    var cents = Math.round((a - dollars) * 100);
+    if (cents === 100) {
+      dollars += 1;
+      cents = 0;
+    }
+    if (dollars === 0) {
+      if (cents === 0) return "zero cents";
+      return numWords(cents) + " cent" + (cents === 1 ? "" : "s");
+    }
+    var d = numWords(dollars) + " dollar" + (dollars === 1 ? "" : "s");
+    return cents > 0 ? d + " and " + numWords(cents) + " cent" + (cents === 1 ? "" : "s") : d;
+  }
+  function fmtUsd(v) {
+    return v.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  }
+  function buildCommentary(coin) {
+    var meta = COMMENTARY_COINS[coin];
+    var now = new Date();
+    var bars1m = [];
+    var bars30 = [];
+    var dailyRaw = [];
+    var weeklyRaw = [];
+    var monthlyRaw = [];
+    function orEmpty(p) {
+      return p.catch(function () { return []; });
+    }
+    // All five series in parallel, off the coin's Yahoo tape — the
+    // same one-after-another chain that stalled the board used to
+    // stall her tape too. (The board falls back to the house quote
+    // channel behind Yahoo; that channel has no browser door, so
+    // this copy stands on Yahoo alone and holds if it stays silent.)
+    return Promise.all([
+      orEmpty(cached("yahoo:1m:" + meta.pair, function () { return yahooBars(meta.pair, "1m", "5d"); })),
+      orEmpty(cached("yahoo:30m:" + meta.pair, function () { return yahooBars(meta.pair, "30m", "3mo"); })),
+      orEmpty(cached("yahoo:1d:" + meta.pair, function () { return yahooBars(meta.pair, "1d", "10y"); })),
+      orEmpty(cached("yahoo:1wk:" + meta.pair, function () { return yahooBars(meta.pair, "1wk", "5y"); })),
+      orEmpty(cached("yahoo:1mo:" + meta.pair, function () { return yahooBars(meta.pair, "1mo", "10y"); })),
+    ]).then(function (res) {
+      bars1m = res[0];
+      bars30 = res[1];
+      dailyRaw = res[2];
+      weeklyRaw = res[3];
+      monthlyRaw = res[4];
+      if (bars1m.length === 0 && dailyRaw.length === 0) throw new Error("No feed answered for this coin.");
+
+      var lastIntra = bars1m[bars1m.length - 1];
+      var price = lastIntra ? lastIntra.c : (dailyRaw.length ? dailyRaw[dailyRaw.length - 1].c : 0);
+
+      // Forming DAY / WEEK / MONTH candles — the same assembly the
+      // stock board runs: today's intraday merged into the day, the
+      // week's days into the week, the month's days into the month.
+      var latestKey = lastIntra ? etDateKey(new Date(lastIntra.t * 1000)) : etDateKey(now);
+      var todayBars = bars1m.filter(function (b) { return etDateKey(new Date(b.t * 1000)) === latestKey; });
+      var dailyBars = dailyRaw.slice();
+      var todayBar = mergeBars(todayBars);
+      var prevDailyBar = dailyRaw[dailyRaw.length - 1];
+      if (todayBar) {
+        var lastDailyDateStr = prevDailyBar ? new Date(prevDailyBar.t * 1000).toISOString().slice(0, 10) : "";
+        if (lastDailyDateStr !== latestKey) dailyBars.push(todayBar);
+        else if (dailyBars.length > 0) dailyBars[dailyBars.length - 1] = todayBar;
+      }
+      var todayKeyNow = etDateKey(now);
+      var thisWeek = weekKey(todayKeyNow);
+      var weekBarsFromDaily = dailyBars.filter(function (b) {
+        return weekKey(new Date(b.t * 1000).toISOString().slice(0, 10)) === thisWeek;
+      });
+      var formingWeek = mergeBars(weekBarsFromDaily);
+      var weeklyBars = weeklyRaw.length >= 3 ? weeklyRaw.slice() : [];
+      if (formingWeek) {
+        var lastW = weeklyBars[weeklyBars.length - 1];
+        if (lastW && weekKey(new Date(lastW.t * 1000).toISOString().slice(0, 10)) === thisWeek) {
+          weeklyBars[weeklyBars.length - 1] = formingWeek;
+        } else weeklyBars.push(formingWeek);
+      }
+      if (weeklyBars.length < 3) {
+        var byWeek = new Map();
+        dailyBars.forEach(function (b) {
+          var k = weekKey(new Date(b.t * 1000).toISOString().slice(0, 10));
+          var arr = byWeek.get(k) || [];
+          arr.push(b);
+          byWeek.set(k, arr);
+        });
+        weeklyBars = [];
+        Array.from(byWeek.keys()).sort().forEach(function (k) {
+          var merged = mergeBars(byWeek.get(k) || []);
+          if (merged) weeklyBars.push(merged);
+        });
+      }
+      var thisMonth = todayKeyNow.slice(0, 7);
+      var monthBarsFromDaily = dailyBars.filter(function (b) {
+        return new Date(b.t * 1000).toISOString().slice(0, 7) === thisMonth;
+      });
+      var formingMonth = mergeBars(monthBarsFromDaily);
+      var monthlyBars = monthlyRaw.length >= 3 ? monthlyRaw.slice() : [];
+      if (formingMonth) {
+        var lastM = monthlyBars[monthlyBars.length - 1];
+        if (lastM && new Date(lastM.t * 1000).toISOString().slice(0, 7) === thisMonth) {
+          monthlyBars[monthlyBars.length - 1] = formingMonth;
+        } else monthlyBars.push(formingMonth);
+      }
+      if (monthlyBars.length < 3) {
+        var byMonth = new Map();
+        dailyBars.forEach(function (b) {
+          var k = new Date(b.t * 1000).toISOString().slice(0, 7);
+          var arr = byMonth.get(k) || [];
+          arr.push(b);
+          byMonth.set(k, arr);
+        });
+        monthlyBars = [];
+        Array.from(byMonth.keys()).sort().forEach(function (k) {
+          var merged = mergeBars(byMonth.get(k) || []);
+          if (merged) monthlyBars.push(merged);
+        });
+      }
+
+      var bars3m = aggregateMinutes(bars1m, 3);
+      var bars1h = aggregateMinutes(bars30.length ? bars30 : bars1m, 60);
+      var bars4h = aggregateMinutes(bars30.length ? bars30 : bars1m, 240);
+      var bars6h = aggregateMinutes(bars30.length ? bars30 : bars1m, 360);
+
+      // Sierra's room — the 3-minute survey, her gate and all.
+      var sierra = makeRead("3M", "Sierra's Office — Three-Minute Reader", "Sierra", "Three-minute reader", bars3m, price, true);
+
+      // The timeframe cadence she also carries — each frame read off
+      // its own forming candle, in her reading order: 1H · 4H · 6H ·
+      // DAY · WEEK · MONTH.
+      var sable = makeRead("6H", "Sable's Office — Spread Watch", "Sable", "Six-hour spread watch", bars6h, price, false);
+      var frames = [
+        makeRead("1H", "1H Reader Office", "1H Reader", "One-hour timeframe reader", bars1h, price, false),
+        makeRead("4H", "4H Reader Office", "4H Reader", "Four-hour timeframe reader", bars4h, price, false),
+        sable,
+        makeRead("DAY", "DAY Reader Office", "DAY Reader", "Day timeframe reader", dailyBars, price, false),
+        makeRead("WEEK", "WEEK Reader Office", "WEEK Reader", "Week timeframe reader", weeklyBars, price, false),
+        makeRead("MONTH", "MONTH Reader Office", "MONTH Reader", "Month timeframe reader", monthlyBars, price, false),
+      ];
+
+      // SABLE'S ROOM RELAY — her spread line is read OUT OF SABLE'S
+      // ROOM: Sable's exact figure (PVC: live price vs her candle's
+      // Heikin-Ashi close), Sable's direction, and Sable's band word
+      // off her room's locked scale, in Sable's words. Calla never
+      // computes a spread of her own off a separate tape.
+      var spreadFigure = !sable.held && sable.haClose != null ? price - sable.haClose : null;
+      var spreadBand = spreadFigure != null ? spreadBandWord(coin, spreadFigure) : null;
+      var spreadLine = spreadFigure != null && spreadBand
+        ? spreadFigure === 0
+          ? meta.name + " six hour spread — dead flat, " + spreadBand
+          : meta.name + " six hour spread — " + spreadFigureWords(spreadFigure) + " to the " + (spreadFigure > 0 ? "upside" : "downside") + ", " + spreadBand
+        : null;
+      var spread = {
+        figure: spreadFigure,
+        band: spreadBand,
+        line: spreadLine,
+        scaleNote: SPREAD_SCALES[coin].note,
+      };
+
+      // Terra's & Vega's rooms — the five frames, levels riding the
+      // forming candles; a MONTH · WEEK · DAY hit carries her whole
+      // line.
+      var tempBarsByTf = { MONTH: monthlyBars, WEEK: weeklyBars, DAY: dailyBars, "4H": bars4h, "6H": bars6h };
+      var candleKeyByTf = {
+        MONTH: thisMonth,
+        WEEK: thisWeek,
+        DAY: latestKey,
+        "4H": bars4h.length ? new Date(((bars4h[bars4h.length - 1] || {}).t || 0) * 1000).toISOString() : "none",
+        "6H": bars6h.length ? new Date(((bars6h[bars6h.length - 1] || {}).t || 0) * 1000).toISOString() : "none",
+      };
+      function buildFrames(kind) {
+        return ["MONTH", "WEEK", "DAY", "4H", "6H"].map(function (tf) {
+          var f = tempFrame(tf, tempBarsByTf[tf] || [], kind);
+          if (!f) return null;
+          var onLevel = f.level != null && f.level > 0 && price > 0 && Math.abs(price - f.level) / f.level <= 0.003;
+          var hit = onLevel && (tf === "MONTH" || tf === "WEEK" || tf === "DAY");
+          var hitLine = hit && f.level != null
+            ? kind === "bottom"
+              ? meta.name + ". Temp bottom on the " + tf.toLowerCase() + ". Long the bottom, short the top. " + fmtUsd(f.level) + "."
+              : meta.name + ". Temp top on the " + tf.toLowerCase() + ". Short the top, long the bottom. " + fmtUsd(f.level) + "."
+            : null;
+          return {
+            tf: f.tf, light: f.light, call: f.call, level: f.level, fresh: f.fresh,
+            candleKey: candleKeyByTf[tf] || "none", hit: hit, hitLine: hitLine,
+          };
+        }).filter(Boolean);
+      }
+      var terraFrames = buildFrames("bottom");
+      var vegaFrames = buildFrames("top");
+      function framesPhrase(n) { return n === 5 ? "all five frames" : n + " of the five frames"; }
+      var terraVerdict = terraFrames.length === 0
+        ? "HELD — no temp bottom read yet."
+        : "Temp bottoms stand on " + framesPhrase(terraFrames.length) + " for " + meta.name + ". Levels ride the forming Heikin-Ashi candles.";
+      var vegaVerdict = vegaFrames.length === 0
+        ? "HELD — no temp top read yet."
+        : "Temp tops stand on " + framesPhrase(vegaFrames.length) + " for " + meta.name + ". Levels ride the forming Heikin-Ashi candles.";
+
+      var dataSource = "Yahoo Finance chart API — the coin tape";
+      return {
+        ok: true,
+        coin: coin,
+        coinName: meta.name,
+        price: price || null,
+        asOfEt: fmtNyc(now),
+        dataSource: dataSource,
+        feedNote: "Data source: " + dataSource + ". Calla reads the Day Brief (master copy) side of her room: Sierra's 3-minute survey and Terra's & Vega's temp rooms for " + meta.name + ", off the coin's own candles — the same candle setup and reading as the Day Brief.",
+        error: null,
+        sierra: sierra,
+        frames: frames,
+        sable: sable,
+        spread: spread,
+        terra: { frames: terraFrames, verdict: terraVerdict },
+        vega: { frames: vegaFrames, verdict: vegaVerdict },
+      };
+    });
+  }
+  function heldCommentary(coin, err) {
+    var meta = COMMENTARY_COINS[coin];
+    var now = new Date();
+    function held(tf, office, bot, job) { return heldRead(tf, office, bot, job, 0); }
+    var sableHeld = held("6H", "Sable's Office — Spread Watch", "Sable", "Six-hour spread watch");
+    return {
+      ok: false,
+      coin: coin,
+      coinName: meta.name,
+      price: null,
+      asOfEt: fmtNyc(now),
+      dataSource: "none — feed did not answer",
+      feedNote: "The coin tape did not answer on this pass — Calla holds rather than read a stale figure as current.",
+      error: "The coin feed did not answer for " + meta.name + ". (" + (err && err.message ? err.message : "feed error") + ")",
+      sierra: held("3M", "Sierra's Office — Three-Minute Reader", "Sierra", "Three-minute reader"),
+      frames: [
+        held("1H", "1H Reader Office", "1H Reader", "One-hour timeframe reader"),
+        held("4H", "4H Reader Office", "4H Reader", "Four-hour timeframe reader"),
+        sableHeld,
+        held("DAY", "DAY Reader Office", "DAY Reader", "Day timeframe reader"),
+        held("WEEK", "WEEK Reader Office", "WEEK Reader", "Week timeframe reader"),
+        held("MONTH", "MONTH Reader Office", "MONTH Reader", "Month timeframe reader"),
+      ],
+      sable: sableHeld,
+      spread: { figure: null, band: null, line: null, scaleNote: SPREAD_SCALES[coin].note },
+      terra: { frames: [], verdict: "HELD — no temp bottom read yet." },
+      vega: { frames: [], verdict: "HELD — no temp top read yet." },
+    };
+  }
+
   // ── The actions ──────────────────────────────────────────────────
   var Actions = {
     getWatchlist: function () {
@@ -1071,6 +1418,23 @@
       return { stocks: ensureWatchlist() };
     },
     getBoard: getBoard,
+    getCommentary: function (args) {
+      var coin = String((args && args.coin) || "LTC").trim().toUpperCase();
+      if (!COMMENTARY_COINS[coin]) throw new Error("Invalid coin.");
+      return buildCommentary(coin).catch(function (e) {
+        return heldCommentary(coin, e);
+      });
+    },
+    // Calla's voice is Aria — the warm American production voice the
+    // Warlord picked — synthesized line by line through the house
+    // TTS lane on the board's server. This static copy has no server
+    // and no door to that lane, so the lane does not answer here:
+    // her lines stand as text only in her room, and NO other voice
+    // is substituted — the board itself answers exactly this way
+    // whenever the lane does not answer.
+    callaSpeak: function () {
+      return { ok: false, audioUrl: null };
+    },
     getNewsroom: function () {
       return getNewsroom();
     },

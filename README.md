@@ -39,6 +39,32 @@ under the same rules. Entries written inside this copy live in that
 browser's local ledger only; they do not flow back to the house
 board's record.
 
+## What this copy carries (refreshed Nov 17, 2026, off the finished board)
+
+Everything the finished board has: the front readings in the pinned
+order, the locked seven tickers plus Add Stock, Terra's bottoms and
+Vega's tops on MONTH · WEEK · DAY · 4H · 6H, Entries & Exits ranked
+MONTH · WEEK · DAY · 6H, the trade alert, the War Cove Newsroom
+room, both proof pages and his combined chat ledger — and the
+Company Floor whole: **the Owner's office at its head with the
+MARKET BELL window** (the bell computer, sound on, rings at the
+9:30 AM open and the 4:00 PM close, NYC) and **Calla's room** —
+her coin switch (Litecoin · Bitcoin · Ethereum), her board switch
+(Day Brief master copy / this stock board), TEST READ, the named
+commands (!sable · !sierra · !terra · !vega · !survey — the
+one-minute office is refused by name), and her rundowns leading
+with the 6H spread relayed out of Sable's room, in Sable's words.
+The seed stands at the house record as of this refresh: 80 readers'
+entries (42 correct · 32 misses · 6 open), his page empty, waiting
+on his real chat calls.
+
+One piece cannot ride into a static copy, stated plainly: **Calla's
+voice.** Aria is synthesized line by line through the house TTS
+lane on the board's server; a static page has no door to that lane.
+In this copy her lines stand as text in her room and no other voice
+is substituted — the board itself answers the same way whenever
+the lane does not answer.
+
 ## Rebuilding
 
 `assemble.py` re-snapshots the finished board's built client, re-seeds
