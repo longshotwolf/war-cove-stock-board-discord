@@ -17,7 +17,12 @@
 // through the app's URL-mapping prefixes (BARE prefix form):
 //   /nsd → api.nasdaq.com
 //   /yho → query2.finance.yahoo.com
-// Outside Discord the same build drinks direct.
+// Outside Discord the build used to drink direct — that path is dead
+// for a plain browser: neither host sends Access-Control-Allow-Origin,
+// so the browser refuses answers both hosts happily serve (probed
+// Nov 17, 2026 — HTTP 200, no CORS header, on both). For the open web
+// (OBS / stream) the copy rides a relay instead — see THE OPEN-WEB
+// RELAY at the feed layer below. The Discord door above is untouched.
 //
 // THE LEDGERS: the proof pages open on the house record as it stood
 // when this copy was published (seeded below), and keep recording and
@@ -309,23 +314,94 @@
   var rawFetch = window.fetch.bind(window);
   var cache = new Map();
   var CACHE_MS = 20000;
+  function ttlFor(key) {
+    if (IN_DISCORD) return CACHE_MS;
+    // Open-web relay mode: the relay is a shared free door and every
+    // call is a coin flip, so the slow frames are fetched rarely —
+    // daily/weekly/monthly sets hold for minutes, not seconds. The
+    // forming frames still merge off the fresh intraday bars.
+    if (/:1wk:|:1mo:|:1d:|nasdaq-daily/.test(key)) return 5 * 60000;
+    if (/:30m:/.test(key)) return 60000;
+    return CACHE_MS;
+  }
   function cached(key, fn) {
     var hit = cache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_MS) return Promise.resolve(hit.value);
+    if (hit && Date.now() - hit.at < ttlFor(key)) return Promise.resolve(hit.value);
     return fn().then(function (value) {
       cache.set(key, { at: Date.now(), value: value });
       return value;
     });
   }
-  function fetchJson(url) {
+  function fetchRaw(url, ms) {
     var ctrl = new AbortController();
-    var timer = setTimeout(function () { ctrl.abort(); }, 9000);
+    var timer = setTimeout(function () { ctrl.abort(); }, ms);
     return rawFetch(url, { headers: { Accept: "application/json" }, signal: ctrl.signal })
+      .finally(function () { clearTimeout(timer); });
+  }
+  function fetchJsonDirect(url) {
+    return fetchRaw(url, 9000).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    });
+  }
+
+  // ── THE OPEN-WEB RELAY (plain browser / OBS — never inside Discord) ──
+  // Nasdaq and Yahoo send no CORS headers, so outside Discord every
+  // data call rides the allorigins relay, which echoes the page's own
+  // origin back in Access-Control-Allow-Origin (verified Nov 17, 2026
+  // from this copy's GitHub origin, with real Yahoo chart JSON, real
+  // daily bars and real news items parsed off its answers). The relay
+  // is a shared free door: any single attempt can stall past its edge
+  // limit or fail outright, while the next attempt lands in seconds —
+  // so each call is retried across the relay's two endpoints, paced
+  // through a queue (never a parallel burst), and given 30s to land.
+  // Nasdaq itself never answered through the relay in testing
+  // (timeouts on every attempt), so in this mode nasdaqChart and
+  // nasdaqDaily stand down at once and the Yahoo fallbacks — already
+  // the board's own second door — carry the board.
+  var AO_BASE = "https://api.allorigins.win";
+  var relayTail = Promise.resolve();
+  function throughRelay(fn) {
+    var p = relayTail.then(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, 350); }).then(fn);
+    });
+    relayTail = p.then(function () {}, function () {});
+    return p;
+  }
+  function aoGet(url) {
+    return fetchRaw(AO_BASE + "/get?url=" + encodeURIComponent(url), 30000)
       .then(function (res) {
-        if (!res.ok) throw new Error("HTTP " + res.status);
+        if (!res.ok) throw new Error("relay HTTP " + res.status);
         return res.json();
       })
-      .finally(function () { clearTimeout(timer); });
+      .then(function (outer) {
+        if (!outer || typeof outer.contents !== "string") throw new Error("relay answer unparsable");
+        if (outer.status && outer.status.http_code >= 400) throw new Error("relay upstream HTTP " + outer.status.http_code);
+        return JSON.parse(outer.contents);
+      });
+  }
+  function aoRaw(url) {
+    return fetchRaw(AO_BASE + "/raw?url=" + encodeURIComponent(url), 30000)
+      .then(function (res) {
+        if (!res.ok) throw new Error("relay HTTP " + res.status);
+        return res.json();
+      });
+  }
+  function relayedJson(url) {
+    var attempts = [
+      function () { return aoGet(url); },
+      function () { return aoRaw(url); },
+      function () { return aoGet(url); },
+    ];
+    var chain = Promise.reject(new Error("relay chain start"));
+    attempts.forEach(function (fn) {
+      chain = chain.catch(function () { return throughRelay(fn); });
+    });
+    return chain;
+  }
+  function fetchJson(url) {
+    if (IN_DISCORD) return fetchJsonDirect(url);
+    return relayedJson(url);
   }
   function numOrNull(v) {
     if (typeof v === "number") return Number.isFinite(v) ? v : null;
@@ -336,6 +412,9 @@
     return null;
   }
   function nasdaqChart(ticker) {
+    // Open-web mode: stand down at once (see THE OPEN-WEB RELAY) —
+    // the coded Yahoo 1m fallback below carries the intraday bars.
+    if (!IN_DISCORD) return Promise.reject(new Error("Nasdaq has no open-web door"));
     return fetchJson(NSD + "/api/quote/" + encodeURIComponent(ticker) + "/chart?assetclass=stocks")
       .then(function (json) {
         var data = json && json.data;
@@ -362,6 +441,9 @@
       });
   }
   function nasdaqDaily(ticker) {
+    // Open-web mode: stand down at once (see THE OPEN-WEB RELAY) —
+    // the coded Yahoo 1d fallback below carries the daily bars.
+    if (!IN_DISCORD) return Promise.reject(new Error("Nasdaq has no open-web door"));
     return fetchJson(NSD + "/api/quote/" + encodeURIComponent(ticker) + "/historical?assetclass=stocks&fromdate=2023-01-01&limit=9999")
       .then(function (json) {
         var rows = json && json.data && json.data.tradesTable && json.data.tradesTable.rows;
@@ -383,6 +465,11 @@
       });
   }
   function yahooBars(ticker, interval, range) {
+    // Open-web relay mode: only the last session of 1m bars is ever
+    // read (the latest day's bars drive every intraday frame), and
+    // the one-day payload beats the relay's stall limit far more
+    // often than the five-day one. Discord mode is unchanged.
+    if (!IN_DISCORD && interval === "1m" && range === "5d") range = "1d";
     return fetchJson(YHO + "/v8/finance/chart/" + encodeURIComponent(ticker) + "?interval=" + interval + "&range=" + range + "&includePrePost=false")
       .then(function (json) {
         var result = json && json.chart && json.chart.result && json.chart.result[0];
