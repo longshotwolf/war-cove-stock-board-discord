@@ -354,22 +354,52 @@
   // is a shared free door: any single attempt can stall past its edge
   // limit or fail outright, while the next attempt lands in seconds —
   // so each call is retried across the relay's two endpoints, paced
-  // through a queue (never a parallel burst), and given 30s to land.
+  // through a queue (never a parallel burst).
   // Nasdaq itself never answered through the relay in testing
   // (timeouts on every attempt), so in this mode nasdaqChart and
   // nasdaqDaily stand down at once and the Yahoo fallbacks — already
   // the board's own second door — carry the board.
+  //
+  // FAIL-FAST (Warlord order, Nov 18, 2026 — copy only): the night of
+  // Nov 17–18 the relay went DOWN (522/500, 17–23s an attempt) and a
+  // ticker switch burned 3 attempts × 30s × 5 chart calls through the
+  // serial queue — 5–7½ minutes of "every office is turning" before
+  // the saved-board fallback. Now light frames (the intraday, news
+  // and commentary calls) get 8s an attempt, while the fat historical
+  // payloads (1d · 1wk · 1mo — multi-year bar sets that legitimately
+  // ride slow) keep 18s. And once two relay attempts in a row have
+  // failed, the relay stands proven down for a 20s window: attempts
+  // still queued refuse at once instead of burning their full
+  // timeouts, so a dead relay reaches the saved-board fallback in
+  // well under a minute. A landed attempt clears the proof at once.
+  // With the relay answering, none of this engages — same calls,
+  // same data, same board.
   var AO_BASE = "https://api.allorigins.win";
   var relayTail = Promise.resolve();
+  var relayFailStreak = 0;
+  var relayDownUntil = 0;
+  function relayTimeoutFor(url) {
+    return /[?&]interval=(1d|1wk|1mo)(&|$)/.test(url) ? 18000 : 8000;
+  }
   function throughRelay(fn) {
     var p = relayTail.then(function () {
-      return new Promise(function (resolve) { setTimeout(resolve, 350); }).then(fn);
+      return new Promise(function (resolve) { setTimeout(resolve, 350); }).then(function () {
+        if (Date.now() < relayDownUntil) throw new Error("relay proven down — failing fast");
+        return fn().then(function (value) {
+          relayFailStreak = 0;
+          return value;
+        }, function (err) {
+          relayFailStreak += 1;
+          if (relayFailStreak >= 2) relayDownUntil = Date.now() + 20000;
+          throw err;
+        });
+      });
     });
     relayTail = p.then(function () {}, function () {});
     return p;
   }
-  function aoGet(url) {
-    return fetchRaw(AO_BASE + "/get?url=" + encodeURIComponent(url), 30000)
+  function aoGet(url, ms) {
+    return fetchRaw(AO_BASE + "/get?url=" + encodeURIComponent(url), ms)
       .then(function (res) {
         if (!res.ok) throw new Error("relay HTTP " + res.status);
         return res.json();
@@ -380,18 +410,19 @@
         return JSON.parse(outer.contents);
       });
   }
-  function aoRaw(url) {
-    return fetchRaw(AO_BASE + "/raw?url=" + encodeURIComponent(url), 30000)
+  function aoRaw(url, ms) {
+    return fetchRaw(AO_BASE + "/raw?url=" + encodeURIComponent(url), ms)
       .then(function (res) {
         if (!res.ok) throw new Error("relay HTTP " + res.status);
         return res.json();
       });
   }
   function relayedJson(url) {
+    var ms = relayTimeoutFor(url);
     var attempts = [
-      function () { return aoGet(url); },
-      function () { return aoRaw(url); },
-      function () { return aoGet(url); },
+      function () { return aoGet(url, ms); },
+      function () { return aoRaw(url, ms); },
+      function () { return aoGet(url, ms); },
     ];
     var chain = Promise.reject(new Error("relay chain start"));
     attempts.forEach(function (fn) {
@@ -1117,10 +1148,32 @@
   }
 
   // ── getBoard with the board's own stale law ──────────────────────
-  function getBoard(args) {
-    var ticker = String((args && args.ticker) || "").trim().toUpperCase();
-    if (!TICKER_RE.test(ticker)) return Promise.reject(new Error("Invalid ticker."));
-    return buildBoard(ticker).then(function (board) {
+  // CACHE-FIRST PAINT (Warlord order, Nov 18, 2026 — copy only): when
+  // a saved board stands for a stock, it paints at once — marked
+  // stale under the board's own stale law, the same stale serve the
+  // failure path has always given — while the live build runs behind
+  // it. When the build lands it is served fresh on the board's next
+  // pass (the client re-asks every 30–60s), and a call that arrives
+  // while the build is still running joins it and paints fresh the
+  // moment it lands. A first-ever stock with no saved board builds
+  // in the foreground, exactly as before; a failed build leaves the
+  // saved board standing.
+  var boardInFlight = {};
+  var boardFresh = {};
+  function staleServe(board) {
+    return Object.assign({}, board, {
+      stale: true,
+      error: "Live feed unreachable — showing the last saved board for this stock.",
+    });
+  }
+  function boardFallback(ticker, e) {
+    var snap = lsGet(LS_SNAP + ticker, null);
+    if (snap && snap.board) return staleServe(snap.board);
+    return errorBoard(ticker, e);
+  }
+  function runBoardBuild(ticker) {
+    if (boardInFlight[ticker]) return boardInFlight[ticker];
+    var p = buildBoard(ticker).then(function (board) {
       if (!board.ok || board.reads.every(function (r) { return r.held; })) {
         throw new Error("Feed returned no reads.");
       }
@@ -1130,17 +1183,38 @@
       } catch (e) {
         /* the record stands by; the board still ships */
       }
+      boardFresh[ticker] = board;
       return board;
-    }).catch(function (e) {
-      var snap = lsGet(LS_SNAP + ticker, null);
-      if (snap && snap.board) {
-        var stale = Object.assign({}, snap.board, {
-          stale: true,
-          error: "Live feed unreachable — showing the last saved board for this stock.",
+    });
+    boardInFlight[ticker] = p;
+    var clear = function () {
+      if (boardInFlight[ticker] === p) delete boardInFlight[ticker];
+    };
+    p.then(clear, clear);
+    return p;
+  }
+  function getBoard(args) {
+    var ticker = String((args && args.ticker) || "").trim().toUpperCase();
+    if (!TICKER_RE.test(ticker)) return Promise.reject(new Error("Invalid ticker."));
+    var fresh = boardFresh[ticker];
+    if (fresh) {
+      delete boardFresh[ticker];
+      return Promise.resolve(fresh);
+    }
+    var snap = lsGet(LS_SNAP + ticker, null);
+    if (snap && snap.board) {
+      if (boardInFlight[ticker]) {
+        return boardInFlight[ticker].catch(function (e) {
+          return boardFallback(ticker, e);
         });
-        return stale;
       }
-      return errorBoard(ticker, e);
+      runBoardBuild(ticker).catch(function () {
+        /* background build failed — the saved board already painted */
+      });
+      return Promise.resolve(staleServe(snap.board));
+    }
+    return runBoardBuild(ticker).catch(function (e) {
+      return boardFallback(ticker, e);
     });
   }
 
