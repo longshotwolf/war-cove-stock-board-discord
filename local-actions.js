@@ -692,7 +692,7 @@
       var byTf = new Map(reads.map(function (r) { return [r.tf, r]; }));
 
       var tempBarsByTf = { MONTH: monthlyBars, WEEK: weeklyBars, DAY: dailyBars, "4H": bars4h, "6H": bars6h };
-      var tempOrder = ["MONTH", "WEEK", "DAY", "4H", "6H"];
+      var tempOrder = ["MONTH", "WEEK", "DAY", "6H", "4H"];
       var terraFrames = tempOrder.map(function (tf) { return tempFrame(tf, tempBarsByTf[tf] || [], "bottom"); }).filter(Boolean);
       var vegaFrames = tempOrder.map(function (tf) { return tempFrame(tf, tempBarsByTf[tf] || [], "top"); }).filter(Boolean);
       var greenCount = terraFrames.filter(function (f) { return f.light === "GREEN"; }).length;
@@ -1476,7 +1476,7 @@
         "6H": bars6h.length ? new Date(((bars6h[bars6h.length - 1] || {}).t || 0) * 1000).toISOString() : "none",
       };
       function buildFrames(kind) {
-        return ["MONTH", "WEEK", "DAY", "4H", "6H"].map(function (tf) {
+        return ["MONTH", "WEEK", "DAY", "6H", "4H"].map(function (tf) {
           var f = tempFrame(tf, tempBarsByTf[tf] || [], kind);
           if (!f) return null;
           var onLevel = f.level != null && f.level > 0 && price > 0 && Math.abs(price - f.level) / f.level <= 0.003;
