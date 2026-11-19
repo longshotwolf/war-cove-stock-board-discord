@@ -18,17 +18,17 @@
       data-generated-space-root=""
       data-generated-space-slug="day-brief-stock-board"
     ></div>
-  <!-- WC-LINK-COUNTER key=stock-board-discord -->
+  <!-- WC-LINK-COUNTER key=stock-board-discord fp=wcfp-d8005103c6 -->
 <script>
 (function(){try{
-var KEY="stock-board-discord",DOC="https://longshotwolf.github.io/war-cove-newsroom-preview/simli-endpoint.json";
+var KEY="stock-board-discord",FP="wcfp-d8005103c6",DOC="https://longshotwolf.github.io/war-cove-newsroom-preview/simli-endpoint.json";
 var id=null;try{id=window.sessionStorage.getItem("wc-link-id");if(!id){id="w"+Math.random().toString(36).slice(2)+Date.now().toString(36);window.sessionStorage.setItem("wc-link-id",id);}}catch(e){id="w"+Math.random().toString(36).slice(2)+Date.now().toString(36);}
 var ep=null,viewed=false,fails=0;
-function send(path){if(!ep)return;try{fetch(ep+path+"?page="+encodeURIComponent(KEY)+"&id="+encodeURIComponent(id),{mode:"cors",cache:"no-store",keepalive:true}).then(function(r){if(!r.ok)throw 0;fails=0;if(path==="/view")viewed=true;}).catch(function(){fails++;if(fails>=2){ep=null;discover();}});}catch(e){}}
+function send(path){if(!ep)return;try{fetch(ep+path+"?page="+encodeURIComponent(KEY)+"&fp="+encodeURIComponent(FP)+"&id="+encodeURIComponent(id),{mode:"cors",cache:"no-store",keepalive:true}).then(function(r){if(!r.ok)throw 0;fails=0;if(path==="/view")viewed=true;}).catch(function(){fails++;if(fails>=2){ep=null;discover();}});}catch(e){}}
 function discover(){try{fetch(DOC+"?cb="+Date.now(),{mode:"cors",cache:"no-store"}).then(function(r){return r.json();}).then(function(j){if(j&&j.counter){ep=j.counter;if(!viewed)send("/view");}}).catch(function(){});}catch(e){}}
 discover();
 setInterval(function(){if(ep){if(!viewed)send("/view");else send("/beat");}else discover();},20000);
-}catch(e){}})();
+}catch(e){})();})();
 </script>
 <!-- /WC-LINK-COUNTER -->
 </body>
